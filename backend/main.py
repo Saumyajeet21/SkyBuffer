@@ -204,8 +204,10 @@ def build_features(origin, dest, airline, dep_date_str, hour, vis, wind):
         le = les[col]; v = val if val in set(le.classes_) else le.classes_[0]
         row[col] = int(le.transform([v])[0])
     X = pd.DataFrame([row])[feats].copy()
-    X[["Distance","Visibility","WindSpeed"]] = scaler.transform(X[["Distance","Visibility","WindSpeed"]])
-    return X
+    # scaler was fitted on all 14 features in train.py — transform the full array
+    X_scaled = scaler.transform(X.values)
+    return X_scaled
+
 
 # ══════════════════════════════════════════════════════════
 # SCHEMAS
