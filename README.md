@@ -45,15 +45,20 @@ Every prediction page includes:
 
 **Objective:** Predict binary outcome — Delayed (DepDelay > 15 min) or On Time.
 **Target variable:** `IsDelayed` (0 = On Time, 1 = Delayed)
+**Dataset:** 479,772 real BTS 2024 flights · 23.7% delayed · Train/Test: 80/20
 
 | Model | Type | Accuracy | Precision | Recall | F1-Score | Train Time |
 |---|---|---|---|---|---|---|
-| Logistic Regression | Base Learner | 57.0% | 26.9% | 68.8% | 38.6% | 29.2s |
-| Decision Tree | Base Learner | 60.0% | 28.0% | 65.8% | 39.3% | 0.7s |
+| Logistic Regression | Base Learner | 76.2% | 27.4% | 0.3% | 0.6% | 4.6s |
+| Decision Tree | Base Learner | 76.0% | 40.6% | 2.6% | 5.0% | 0.9s |
+
+**Note:** Base learners with this imbalanced dataset (3.2:1 ratio) learn to mostly predict "On Time".
+Ensemble methods in Task 5 correct this significantly.
 
 **Outputs:**
 - Confusion matrix with TN, FP, FN, TP values and percentages
 - Classification report per model (Precision, Recall, F1 per class)
+
 
 ---
 
@@ -63,12 +68,13 @@ Every prediction page includes:
 
 | Model | Technique | Accuracy | Precision | Recall | F1-Score | Train Time | Improvement over Base |
 |---|---|---|---|---|---|---|---|
-| Random Forest | Bagging | 64.1% | 30.2% | 63.2% | 40.9% | 10.8s | +1.6% F1 over Decision Tree |
-| **XGBoost** | **Boosting** | **64.8%** | **31.1%** | **64.8%** | **42.0%** | **2.9s** | **+5.6% F1 over Logistic Regression** |
+| **Random Forest** | **Bagging** | **74.2%** | **40.5%** | **18.8%** | **25.7%** | **23.5s** | **+5x F1 over Logistic Regression** |
+| XGBoost | Boosting | 75.9% | 47.5% | 17.5% | 25.5% | 6.5s | +5x F1 over Decision Tree |
 
 **Outputs:**
 - Feature importance bar charts for Random Forest and XGBoost
 - Accuracy improvement comparison table vs base learners
+
 
 ---
 
@@ -76,27 +82,32 @@ Every prediction page includes:
 
 Every prediction result page renders a full consolidated analysis:
 
-**Consolidated Metrics Table (all 4 models):**
+**Consolidated Metrics Table (all 4 models) — BTS 2024 Dataset:**
 
 | Model | Type | Accuracy | Precision | Recall | F1-Score | Train Time |
 |---|---|---|---|---|---|---|
-| Logistic Regression | Base | 57.0% | 26.9% | 68.8% | 38.6% | 29.2s |
-| Decision Tree | Base | 60.0% | 28.0% | 65.8% | 39.3% | 0.7s |
-| Random Forest | Ensemble | 64.1% | 30.2% | 63.2% | 40.9% | 10.8s |
-| **XGBoost** | **Ensemble** | **64.8%** | **31.1%** | **64.8%** | **42.0%** | **2.9s** |
+| Logistic Regression | Base | 76.2% | 27.4% | 0.3% | 0.6% | 4.6s |
+| Decision Tree | Base | 76.0% | 40.6% | 2.6% | 5.0% | 0.9s |
+| **Random Forest** | **Ensemble** | **74.2%** | **40.5%** | **18.8%** | **25.7%** | **23.5s** |
+| XGBoost | Ensemble | 75.9% | 47.5% | 17.5% | 25.5% | 6.5s |
+
+**Why accuracy exceeds 76% for base learners but F1 is low:**
+The dataset has 76.3% On Time flights. A model predicting "always On Time" scores 76.3% accuracy with 0% recall.
+Base learners with mild class weighting (scale=1.5) fall into this trap.
+Ensemble methods with tree-depth and feature randomness escape it — RF achieves 18.8% recall vs 0.3% for LR.
 
 **Comparison Findings:**
 
 | Criterion | Finding |
 |---|---|
-| Best Accuracy | XGBoost — 64.8% |
-| Best F1-Score | XGBoost — 42.0% |
-| Best Precision | XGBoost — 31.1% |
-| Best Recall | Logistic Regression — 68.8% |
-| Fastest Training | Decision Tree — 0.7s |
-| Overfitting Risk | Decision Tree overfits; RF and XGBoost generalize better |
-| Underfitting | Logistic Regression underfits non-linear patterns |
-| **Recommendation** | **XGBoost — best F1, fast training, strong generalization** |
+| Best Accuracy | XGBoost — 75.9% |
+| Best F1-Score | Random Forest — 25.7% |
+| Best Precision | XGBoost — 47.5% |
+| Best Recall | Random Forest — 18.8% |
+| Fastest Training | Decision Tree — 0.9s |
+| Overfitting Risk | Decision Tree: high; RF and XGBoost generalize better |
+| Underfitting | Logistic Regression: underfits non-linear delay patterns |
+| **Recommendation** | **Random Forest — best F1, good recall, strong generalization** |
 
 **Visualizations on every prediction result page:**
 - 4 model prediction cards with probability bars (Accuracy, Precision, Recall, F1)
@@ -104,6 +115,8 @@ Every prediction result page renders a full consolidated analysis:
 - Confusion matrices for all 4 classifiers with axis labels
 - Feature importance charts for Random Forest and XGBoost
 - Final recommendation with 4-point justification
+- Estimated delay in minutes (XGBoost Regressor)
+
 
 ---
 

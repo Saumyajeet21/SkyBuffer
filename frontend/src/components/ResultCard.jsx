@@ -1,14 +1,15 @@
 import './ResultCard.css'
 
+
 const CLF_COLORS = {
   'Logistic Regression': '#4F8EF7',
-  'Decision Tree':       '#a29bfe',
-  'Random Forest':       '#00cec9',
-  'XGBoost':             '#00b894',
+  'Decision Tree': '#a29bfe',
+  'Random Forest': '#00cec9',
+  'XGBoost': '#00b894',
 }
 const TYPE_BADGE = {
-  'Base':     { label: 'Base Learner', cls: 'badge-base' },
-  'Ensemble': { label: 'Ensemble',     cls: 'badge-ens'  },
+  'Base': { label: 'Base Learner', cls: 'badge-base' },
+  'Ensemble': { label: 'Ensemble', cls: 'badge-ens' },
 }
 
 /* ── Inline progress bar ── */
@@ -27,7 +28,7 @@ function ConfMatrix({ cm, color }) {
   if (!cm) return <span className="rc-na">Data not available</span>
   const { TN = 0, FP = 0, FN = 0, TP = 0 } = cm
   const total = TN + FP + FN + TP || 1
-  const pct   = v => `${((v / total) * 100).toFixed(1)}%`
+  const pct = v => `${((v / total) * 100).toFixed(1)}%`
   return (
     <div className="rc-cm">
       <div className="rc-cm-labels-top">
@@ -88,18 +89,18 @@ function FeatImportance({ data, color }) {
 
 export default function ResultCard({ result }) {
   const {
-    prob, status, consensus,
+    prob, status, consensus, delay_minutes,
     weather, congestion, alternates,
     model_comparison, recommended_model, recommendation_reason,
     confusion_matrices, feature_importance, dataset_info
   } = result
 
-  const clfs      = model_comparison   || {}
-  const cms       = confusion_matrices || {}
-  const fi        = feature_importance || {}
-  const clfNames  = Object.keys(clfs)
+  const clfs = model_comparison || {}
+  const cms = confusion_matrices || {}
+  const fi = feature_importance || {}
+  const clfNames = Object.keys(clfs)
   const isDelayed = status === 'Delayed'
-  const color     = CLF_COLORS[recommended_model] || '#00b894'
+  const color = CLF_COLORS[recommended_model] || '#00b894'
   const bestModel = clfs[recommended_model] || {}
   const delayRate = ((dataset_info?.delayed_rate || 0) * 100).toFixed(1)
 
@@ -112,6 +113,12 @@ export default function ResultCard({ result }) {
         <div className="rc-hero-content">
           <h2 className="rc-hero-status">{status}</h2>
           <div className="rc-hero-stats">
+            <div className="rc-stat-pill" style={{ borderColor: isDelayed ? '#e17055' : '#00b894' }}>
+              <span className="rc-stat-label">Est. Delay</span>
+              <span className="rc-stat-value" style={{ color: isDelayed ? '#e17055' : '#00b894' }}>
+                {delay_minutes > 0 ? `+${delay_minutes} min` : 'On Time'}
+              </span>
+            </div>
             <div className="rc-stat-pill" style={{ borderColor: isDelayed ? '#e17055' : '#00b894' }}>
               <span className="rc-stat-label">Delay Risk</span>
               <span className="rc-stat-value"
@@ -162,9 +169,9 @@ export default function ResultCard({ result }) {
         </p>
         <div className="rc-model-grid">
           {clfNames.map(name => {
-            const m    = clfs[name]
+            const m = clfs[name]
             const badge = TYPE_BADGE[m.Type] || TYPE_BADGE['Base']
-            const mc   = CLF_COLORS[name]
+            const mc = CLF_COLORS[name]
             return (
               <div key={name}
                 className={`rc-model-card ${name === recommended_model ? 'rc-model-best' : ''}`}
@@ -223,7 +230,7 @@ export default function ResultCard({ result }) {
             </thead>
             <tbody>
               {clfNames.map(name => {
-                const m    = clfs[name]
+                const m = clfs[name]
                 const isRec = name === recommended_model
                 return (
                   <tr key={name} className={isRec ? 'rc-best-row' : ''}>

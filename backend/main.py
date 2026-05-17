@@ -57,6 +57,10 @@ try:
 except Exception:
     sb = None
 
+# In-memory history fallback (used when Supabase is not configured)
+_local_history: list = []
+
+
 # ── Airport data ───────────────────────────────────────────
 AIRPORTS = {
     "DEL":{"name":"Indira Gandhi Intl","city":"Delhi","country":"IN","lat":28.5562,"lon":77.1000,"icao":"VIDP"},
@@ -375,25 +379,36 @@ def predict(req: PredictReq):
             except: pass
     alternates = sorted(alternates, key=lambda x: x["prob"])[:2]
 
-    # Save to Supabase
+    # Save to Supabase + local history
+    record = {
+        "created_at":       datetime.utcnow().isoformat() + "Z",
+        "origin":           req.origin,
+        "destination":      req.dest,
+        "airline":          req.airline,
+        "departure_date":   req.departure_date,
+        "departure_hour":   req.departure_hour,
+        "predicted_delay_min": delay_minutes,
+        "delay_probability":float(prob / 100),
+        "status":           status,
+        "visibility":       float(wx["visibility"]),
+        "wind_speed":       float(wx["windSpeed"]),
+        "precipitation":    float(wx["precip"]),
+        "weather_source":   wx["source"],
+        "congestion_index": float(cong["index"]),
+        "congestion_source":cong["source"],
+        "model_name":       recommended,
+    }
+    # Always save to in-memory list
+    _local_history.insert(0, record)
+    if len(_local_history) > 200:
+        _local_history.pop()
+    # Also save to Supabase if connected
     if sb:
         try:
-            sb.table("predictions").insert({
-                "origin":req.origin, "destination":req.dest, "airline":req.airline,
-                "departure_date":req.departure_date, "departure_hour":req.departure_hour,
-                "predicted_delay_min": 0.0,
-                "delay_probability": float(prob/100),
-                "status": status,
-                "visibility": float(wx["visibility"]),
-                "wind_speed": float(wx["windSpeed"]),
-                "precipitation": float(wx["precip"]),
-                "weather_source": wx["source"],
-                "congestion_index": float(cong["index"]),
-                "congestion_source": cong["source"],
-                "model_name": recommended,
-            }).execute()
+            sb.table("predictions").insert(record).execute()
         except Exception as e:
             print(f"Supabase save failed: {e}")
+
 
     return {
         "prob": prob, "status": status, "consensus": consensus,
@@ -423,21 +438,31 @@ def predict(req: PredictReq):
 
 @app.get("/api/history")
 def get_history(search: str = "", limit: int = 30):
-    if not sb: return {"predictions": []}
-    try:
-        q = (sb.table("predictions")
-               .select("created_at,origin,destination,airline,departure_date,"
-                       "departure_hour,predicted_delay_min,status,visibility,wind_speed,congestion_index")
-               .order("created_at", desc=True).limit(limit).execute())
-        data = q.data or []
-        if search:
-            s = search.upper()
-            data = [r for r in data if s in r.get("origin","") or
-                    s in r.get("destination","") or s in r.get("airline","") or
-                    search.lower() in r.get("status","").lower()]
-        return {"predictions": data}
-    except Exception as e:
-        return {"predictions": [], "error": str(e)}
+    # Try Supabase first
+    if sb:
+        try:
+            q = (sb.table("predictions")
+                   .select("created_at,origin,destination,airline,departure_date,"
+                           "departure_hour,predicted_delay_min,status,visibility,wind_speed,congestion_index")
+                   .order("created_at", desc=True).limit(limit).execute())
+            data = q.data or []
+            if search:
+                s = search.upper()
+                data = [r for r in data if s in r.get("origin","") or
+                        s in r.get("destination","") or s in r.get("airline","") or
+                        search.lower() in r.get("status","").lower()]
+            return {"predictions": data}
+        except Exception as e:
+            print(f"Supabase history error: {e}")
+    # Fallback to in-memory history
+    data = _local_history[:limit]
+    if search:
+        s = search.upper()
+        data = [r for r in data if s in r.get("origin","") or
+                s in r.get("destination","") or s in r.get("airline","") or
+                search.lower() in r.get("status","").lower()]
+    return {"predictions": data}
+
 
 @app.get("/api/airports/search")
 def search_airports(q: str = Query(default="", min_length=0)):
