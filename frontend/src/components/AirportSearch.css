@@ -1,0 +1,40 @@
+/* AirportSearch styles */
+.ap-wrap { position:relative; width:100%; }
+.ap-label { display:block; font-size:.75rem; font-weight:700; letter-spacing:.06em;
+            color:var(--sub); text-transform:uppercase; margin-bottom:.4rem; }
+
+.ap-input-box {
+  display:flex; align-items:center; gap:.5rem;
+  background:var(--bg2); border:1.5px solid var(--border);
+  border-radius:10px; padding:.7rem 1rem; cursor:text;
+  transition:border-color .2s, box-shadow .2s; min-height:48px;
+}
+.ap-input-box.focused  { border-color:var(--blue); box-shadow:0 0 0 3px rgba(79,142,247,.12); }
+.ap-input-box.has-value{ border-color:var(--teal); }
+
+.ap-input { background:transparent; border:none; outline:none; color:var(--text);
+            font-size:.95rem; font-family:inherit; width:100%; }
+.ap-input::placeholder { color:var(--sub); }
+
+.ap-flag    { font-size:1.3rem; flex-shrink:0; }
+.ap-selected{ font-size:.95rem; font-weight:600; color:var(--text); flex:1; }
+.ap-clear   { background:none; border:none; color:var(--sub); cursor:pointer;
+              font-size:1rem; padding:.1rem .3rem; border-radius:4px;
+              transition:color .2s; line-height:1; }
+.ap-clear:hover { color:var(--red, #ff6b6b); }
+
+.ap-dropdown {
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:200;
+  background:var(--bg2); border:1.5px solid var(--border); border-radius:12px;
+  max-height:280px; overflow-y:auto; box-shadow:0 16px 40px rgba(0,0,0,.4);
+}
+.ap-hint { padding:.75rem 1rem; color:var(--sub); font-size:.85rem; }
+.ap-option {
+  display:flex; align-items:center; gap:.75rem;
+  padding:.7rem 1rem; cursor:pointer; transition:background .15s;
+}
+.ap-option:hover { background:var(--bg3); }
+.ap-opt-flag { font-size:1.2rem; flex-shrink:0; }
+.ap-opt-code { font-weight:800; font-size:.95rem; color:var(--blue); margin-right:.5rem; }
+.ap-opt-name { font-size:.88rem; color:var(--text); font-weight:500; }
+.ap-opt-full { display:block; font-size:.75rem; color:var(--sub); margin-top:.1rem; }
