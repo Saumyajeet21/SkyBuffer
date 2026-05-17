@@ -4,7 +4,9 @@ import ResultCard from '../components/ResultCard.jsx'
 import History from '../components/History.jsx'
 import AirportSearch from '../components/AirportSearch.jsx'
 import FlightSelector from '../components/FlightSelector.jsx'
+import Visualizations from '../components/Visualizations.jsx'
 import './Dashboard.css'
+
 
 export default function Dashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('predict')
@@ -65,13 +67,18 @@ export default function Dashboard({ user, onLogout }) {
         </div>
 
         <nav className="sidebar-nav">
-          {[['predict','🔍','Predict'],['history','📋','History']].map(([k,ico,lbl]) => (
+          {[
+            ['predict',  '🔍', 'Predict'],
+            ['history',  '📋', 'History'],
+            ['visualize','📊', 'Visualizations'],
+          ].map(([k,ico,lbl]) => (
             <button key={k} className={`nav-item ${activeTab===k?'active':''}`}
               onClick={() => setActiveTab(k)}>
               <span>{ico}</span> {lbl}
             </button>
           ))}
         </nav>
+
 
         <div className="sidebar-footer">
           <div className="user-pill">
@@ -98,9 +105,11 @@ export default function Dashboard({ user, onLogout }) {
 
         {/* Mobile tabs */}
         <div className="tabs mobile-tabs">
-          <button className={`tab ${activeTab==='predict'?'active':''}`}  onClick={()=>setActiveTab('predict')}>🔍 Predict</button>
-          <button className={`tab ${activeTab==='history'?'active':''}`}  onClick={()=>setActiveTab('history')}>📋 History</button>
+          <button className={`tab ${activeTab==='predict'   ?'active':''}`} onClick={()=>setActiveTab('predict')}>🔍 Predict</button>
+          <button className={`tab ${activeTab==='history'   ?'active':''}`} onClick={()=>setActiveTab('history')}>📋 History</button>
+          <button className={`tab ${activeTab==='visualize' ?'active':''}`} onClick={()=>setActiveTab('visualize')}>📊 Visualizations</button>
         </div>
+
 
         {/* ── PREDICT TAB ── */}
         {activeTab === 'predict' && (
@@ -202,8 +211,10 @@ export default function Dashboard({ user, onLogout }) {
           </div>
         )}
 
-        {activeTab === 'history' && <History />}
+        {activeTab === 'history'   && <History />}
+        {activeTab === 'visualize' && <Visualizations />}
       </main>
+
     </div>
   )
 }

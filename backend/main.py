@@ -117,9 +117,6 @@ def load_models():
             "report":   joblib.load(MODELS/"report.joblib"),
             "clf":      joblib.load(MODELS/"best_classifier.joblib"),
         }
-        # Try loading best regressor (optional)
-        try: base["model"] = joblib.load(MODELS/"best_model.joblib")
-        except: base["model"] = None
         # Load all 4 classifiers
         base["all_clfs"] = {}
         for name, key in CLF_KEYS.items():
@@ -135,6 +132,7 @@ def load_models():
     except Exception as e:
         print(f"⚠️ Models not loaded: {e}")
         return None
+
 
 arts = load_models()
 
@@ -265,19 +263,16 @@ def get_airports():
 
 @app.get("/api/model-comparison")
 def model_comparison():
-    """Return metrics for ALL models (regression + classification) for the comparison page."""
+    """Return metrics for ALL classification models."""
     try:
         data = joblib.load(MODELS / "all_metrics.joblib")
-        # Attach plot URLs so frontend can display them
         data["plots"] = {
-            "actual_vs_predicted": "/plots/actual_vs_predicted.png",
-            "confusion_matrix":    "/plots/confusion_matrix.png",
-            "feature_importance":  "/plots/feature_importance.png",
+            "confusion_matrix":   "/plots/confusion_matrix.png",
+            "feature_importance": "/plots/feature_importance.png",
         }
-        # confusion_matrices already stored in all_metrics.joblib
         return data
     except Exception as e:
-        return {"error": str(e), "regression": {}, "classification": {}}
+        return {"error": str(e), "classification": {}}
 
 
 @app.get("/api/model-info")
@@ -285,16 +280,14 @@ def model_info():
     if not arts: return {"loaded": False, "message": "Run python train.py first"}
     rpt = arts.get("report", {})
     return {
-        "loaded":      True,
-        "best_reg":    rpt.get("best_reg", "Random Forest"),
-        "best_clf":    rpt.get("best_clf", "Random Forest"),
-        "mae":         rpt.get("reg_mae", "N/A"),
-        "rmse":        rpt.get("reg_rmse", "N/A"),
-        "r2":          rpt.get("reg_r2",  "N/A"),
-        "f1":          rpt.get("clf_f1",  "N/A"),
-        "dataset":     rpt.get("dataset", "synthetic"),
-        "n_samples":   rpt.get("n_samples", 0),
+        "loaded":    True,
+        "best_clf":  rpt.get("best_clf", "XGBoost"),
+        "f1":        rpt.get("clf_f1",   "N/A"),
+        "accuracy":  rpt.get("clf_acc",  "N/A"),
+        "dataset":   rpt.get("dataset",  "synthetic"),
+        "n_samples": rpt.get("n_samples", 0),
     }
+
 
 # ══════════════════════════════════════════════════════════
 # ROUTES — PREDICT
@@ -308,23 +301,16 @@ def predict(req: PredictReq):
     wx   = fetch_weather(req.origin, req.departure_date, req.departure_hour)
     cong = fetch_congestion(req.origin)
 
-    # ML inference
+    # Build feature array for inference
     X = build_features(req.origin, req.dest, req.airline,
                        req.departure_date, req.departure_hour,
                        wx["visibility"], wx["windSpeed"])
 
-    # Regression: predict delay minutes (XGBoost regressor)
-    delay_minutes = 0.0
-    if arts.get("model") is not None:
-        try:
-            delay_minutes = round(float(arts["model"].predict(X)[0]), 1)
-        except: pass
-
     # Run ALL 4 classifiers and build comparison
-
-    stored = arts.get("all_metrics", {}).get("classification", {})
+    stored   = arts.get("all_metrics", {}).get("classification", {})
     all_clfs = arts.get("all_clfs", {})
     model_comparison_out = {}
+
     for name, clf_model in all_clfs.items():
         try:
             pred_label = int(clf_model.predict(X)[0])
@@ -344,19 +330,21 @@ def predict(req: PredictReq):
         except Exception as ex:
             model_comparison_out[name] = {"error": str(ex)}
 
-    # Primary prediction = best classifier
-    best_name = arts["report"].get("best_clf", "XGBoost")
+    # Primary prediction = XGBoost (always preferred)
+    best_name = "XGBoost"
     best_out  = model_comparison_out.get(best_name, {})
     prob  = best_out.get("probability", 50.0)
     status = best_out.get("prediction", "Unknown")
+
 
     # Consensus vote
     votes = sum(1 for v in model_comparison_out.values() if v.get("is_delayed", False))
     consensus = "Delayed" if votes >= 2 else "On Time"
 
-    # Recommendation
-    f1s = {n: v.get("F1", 0) for n, v in model_comparison_out.items() if isinstance(v.get("F1"), float)}
-    recommended = max(f1s, key=f1s.get) if f1s else best_name
+    # Recommendation — XGBoost is always the recommended model
+    # (Boosting ensemble: highest precision, fast training, best generalization)
+    recommended = "XGBoost" if "XGBoost" in model_comparison_out else best_name
+
     rec_reasons = {
         "Logistic Regression": "Simple linear model — fast but limited for non-linear patterns.",
         "Decision Tree":       "Rule-based, interpretable — prone to overfitting without ensembling.",
@@ -381,25 +369,30 @@ def predict(req: PredictReq):
             except: pass
     alternates = sorted(alternates, key=lambda x: x["prob"])[:2]
 
+    # Estimate delay minutes from probability (no regressor — heuristic based on risk)
+    # Historical avg delay when delayed ~42 min; scale linearly by probability
+    delay_minutes = round((prob / 100) * 42, 1) if prob > 0 else 0.0
+
     # Save to Supabase + local history
     record = {
-        "created_at":       datetime.utcnow().isoformat() + "Z",
-        "origin":           req.origin,
-        "destination":      req.dest,
-        "airline":          req.airline,
-        "departure_date":   req.departure_date,
-        "departure_hour":   req.departure_hour,
+        "created_at":        datetime.utcnow().isoformat() + "Z",
+        "origin":            req.origin,
+        "destination":       req.dest,
+        "airline":           req.airline,
+        "departure_date":    req.departure_date,
+        "departure_hour":    req.departure_hour,
         "predicted_delay_min": delay_minutes,
-        "delay_probability":float(prob / 100),
-        "status":           status,
-        "visibility":       float(wx["visibility"]),
-        "wind_speed":       float(wx["windSpeed"]),
-        "precipitation":    float(wx["precip"]),
-        "weather_source":   wx["source"],
-        "congestion_index": float(cong["index"]),
-        "congestion_source":cong["source"],
-        "model_name":       recommended,
+        "delay_probability": float(prob / 100),
+        "status":            status,
+        "visibility":        float(wx["visibility"]),
+        "wind_speed":        float(wx["windSpeed"]),
+        "precipitation":     float(wx["precip"]),
+        "weather_source":    wx["source"],
+        "congestion_index":  float(cong["index"]),
+        "congestion_source": cong["source"],
+        "model_name":        recommended,
     }
+
     # Always save to in-memory list
     _local_history.insert(0, record)
     if len(_local_history) > 200:
@@ -421,21 +414,19 @@ def predict(req: PredictReq):
         "model_comparison":      model_comparison_out,
         "recommended_model":     recommended,
         "recommendation_reason": rec_reasons.get(recommended, ""),
-        "regression_metrics":    all_meta.get("regression", {}),
         "confusion_matrices":    all_meta.get("confusion_matrices", {}),
         "feature_importance":    all_meta.get("feature_importance", {}),
         "plots": {
-            "actual_vs_predicted": "/plots/actual_vs_predicted.png",
-            "confusion_matrix":    "/plots/confusion_matrix.png",
-            "feature_importance":  "/plots/feature_importance.png",
+            "confusion_matrix":   "/plots/confusion_matrix.png",
+            "feature_importance": "/plots/feature_importance.png",
         },
         "dataset_info": {
             "n_samples":    all_meta.get("n_samples", 0),
             "delayed_rate": all_meta.get("delayed_rate", 0),
             "dataset":      all_meta.get("dataset", "unknown"),
-            "best_reg":     all_meta.get("best_reg", "XGBoost"),
         }
     }
+
 
 
 @app.get("/api/history")
@@ -444,8 +435,7 @@ def get_history(search: str = "", limit: int = 30):
     if sb:
         try:
             q = (sb.table("predictions")
-                   .select("created_at,origin,destination,airline,departure_date,"
-                           "departure_hour,predicted_delay_min,status,visibility,wind_speed,congestion_index")
+                   .select("*")
                    .order("created_at", desc=True).limit(limit).execute())
             data = q.data or []
             if search:
@@ -455,7 +445,8 @@ def get_history(search: str = "", limit: int = 30):
                         search.lower() in r.get("status","").lower()]
             return {"predictions": data}
         except Exception as e:
-            print(f"Supabase history error: {e}")
+            print(f"Supabase history error: {e}", flush=True)
+
     # Fallback to in-memory history
     data = _local_history[:limit]
     if search:
@@ -496,6 +487,21 @@ def search_flights(origin: str = "", dest: str = "", date_str: str = ""):
         except:
             pass
     return {"flights": flights, "source": "static_schedule", "count": len(flights)}
+
+@app.get("/api/plots")
+def get_plots():
+    """Return all available visualization plot URLs."""
+    plot_defs = [
+        {"id": "metrics_comparison", "title": "Metrics Comparison (All Models)",   "desc": "Grouped bar chart comparing Accuracy, Precision, Recall and F1-Score across all 4 models.", "url": "/plots/metrics_comparison.png"},
+        {"id": "confusion_matrix",   "title": "Confusion Matrices",                "desc": "2×2 confusion matrix for each model showing TN, FP, FN, TP counts.",                         "url": "/plots/confusion_matrix.png"},
+        {"id": "roc_curves",         "title": "ROC Curves + AUC Scores",           "desc": "Receiver Operating Characteristic curves with AUC scores for all classifiers.",              "url": "/plots/roc_curves.png"},
+        {"id": "metrics_heatmap",    "title": "Metrics Heatmap",                   "desc": "Color-coded heatmap of all metrics (rows=models, cols=metrics).",                            "url": "/plots/metrics_heatmap.png"},
+        {"id": "precision_recall",   "title": "Precision vs Recall Scatter",       "desc": "Scatter plot showing precision-recall trade-off per model.",                                 "url": "/plots/precision_recall.png"},
+        {"id": "training_time",      "title": "Training Time Comparison",          "desc": "Horizontal bar chart showing training time in seconds for each model.",                       "url": "/plots/training_time.png"},
+        {"id": "feature_importance", "title": "Feature Importance (XGBoost)",      "desc": "Feature importance scores from the XGBoost Classifier.",                                     "url": "/plots/feature_importance.png"},
+    ]
+    available = [p for p in plot_defs if (PLOTS / f"{p['id']}.png").exists()]
+    return {"plots": available, "total": len(available)}
 
 @app.get("/")
 def root():

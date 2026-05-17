@@ -1,0 +1,105 @@
+/* Visualizations.css */
+
+.viz-wrap { display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* Header */
+.viz-header { text-align: center; }
+.viz-title  { font-size: 1.6rem; font-weight: 800; margin-bottom: .4rem; }
+.viz-sub    { color: var(--sub); font-size: .88rem; margin-bottom: 1rem; }
+
+/* Sub-tabs */
+.viz-tabs   { display: flex; justify-content: center; gap: .75rem; flex-wrap: wrap; }
+.viz-tab    {
+  padding: .5rem 1.4rem; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.1);
+  background: transparent; color: var(--sub); font-size: .9rem; cursor: pointer;
+  transition: all .2s; font-weight: 600;
+}
+.viz-tab:hover  { border-color: var(--accent, #4F8EF7); color: #fff; }
+.viz-tab.active { background: var(--accent, #4F8EF7); border-color: var(--accent, #4F8EF7); color: #fff; }
+
+/* Section headers */
+.live-header    { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.section-title  { font-size: 1.15rem; font-weight: 700; }
+.live-badge     { font-size: .75rem; padding: .25rem .75rem; border-radius: 999px; background: rgba(0,184,148,.15); color: #00b894; border: 1px solid #00b894; }
+.static-badge   { font-size: .75rem; padding: .25rem .75rem; border-radius: 999px; background: rgba(79,142,247,.15); color: #4F8EF7; border: 1px solid #4F8EF7; }
+
+/* Live section */
+.live-section, .training-section { display: flex; flex-direction: column; gap: 1.25rem; }
+
+/* Stat summary row */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+.stat-card  { text-align: center; padding: 1.2rem 1rem; }
+.stat-label { font-size: .78rem; color: var(--sub); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+.stat-value { font-size: 1.9rem; font-weight: 800; line-height: 1; }
+.stat-sub   { font-size: .8rem; color: var(--sub); margin-top: .3rem; }
+
+/* Chart rows */
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.25rem;
+}
+.chart-box  { padding: 1.25rem; }
+.chart-title { font-size: .95rem; font-weight: 700; margin-bottom: 1rem; }
+
+/* Training grid */
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  gap: 1.25rem;
+}
+.viz-card {
+  cursor: pointer; transition: transform .2s, box-shadow .2s;
+  overflow: hidden; padding: 1.2rem;
+}
+.viz-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(79,142,247,.18);
+}
+.viz-card-title  { font-size: 1rem; font-weight: 700; margin-bottom: .3rem; }
+.viz-card-desc   { font-size: .8rem; color: var(--sub); margin-bottom: .85rem; line-height: 1.5; }
+.viz-img-wrap    { position: relative; border-radius: 8px; overflow: hidden; background: #111; }
+.viz-img         { width: 100%; height: auto; display: block; border-radius: 8px; }
+.viz-expand-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .2s; font-size: .85rem;
+  color: #fff; font-weight: 600; border-radius: 8px;
+}
+.viz-card:hover .viz-expand-overlay { opacity: 1; }
+
+/* Lightbox */
+.viz-lightbox {
+  position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center; animation: fadeIn .2s ease;
+}
+.viz-lightbox-inner {
+  background: var(--card, #1a1a2e); border-radius: 14px; padding: 2rem;
+  max-width: 92vw; max-height: 90vh; overflow-y: auto; position: relative;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}
+.viz-close {
+  position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,.1);
+  border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%;
+  cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.viz-close:hover { background: rgba(255,255,255,.25); }
+.viz-lb-title { font-size: 1.2rem; font-weight: 700; margin-bottom: .3rem; }
+.viz-lb-desc  { font-size: .85rem; color: var(--sub); margin-bottom: 1.2rem; }
+.viz-lb-img   { width: 100%; height: auto; border-radius: 10px; }
+
+/* Loading */
+.viz-loading {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 4rem; gap: 1rem; color: var(--sub);
+}
+
+@media (max-width: 700px) {
+  .viz-grid, .charts-row { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
