@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 train.py - SkyBuffer: Airline Flight Delay Prediction
-=====================================================
-TASK 3 - CLASSIFICATION : Logistic Regression, Decision Tree (Base Learners)
+CLASSIFICATION : Logistic Regression, Decision Tree (Base Learners)
                           Random Forest, XGBoost             (Ensemble Methods)
   Metrics : Accuracy, Precision, Recall, F1-Score
   Plots   : Confusion Matrices, Metrics Comparison, ROC Curves,

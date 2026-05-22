@@ -12,6 +12,11 @@ Routes:
 """
 
 import os, time, math, requests, joblib
+import sys
+# Force UTF-8 stdout so emoji/Unicode print() calls never crash on Windows (cp1252)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -27,7 +32,9 @@ import sys; sys.path.insert(0, sys_path)
 from flight_schedule import get_flights as _get_flights, AIRLINES as SCHED_AIRLINES
 from airports_db import get_all_airports, search_airports as _search_airports
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+# Load .env from multiple possible locations to handle any working directory
+load_dotenv(Path(__file__).parent.parent / ".env")  # f:/ML_PROJECT/.env
+load_dotenv(Path.cwd() / ".env")                    # cwd fallback
 
 app = FastAPI(title="SkyBuffer API", version="1.0.0")
 
@@ -53,9 +60,15 @@ try:
     from supabase import create_client
     _url = os.getenv("SUPABASE_URL", "")
     _key = os.getenv("SUPABASE_KEY", "")
-    sb   = create_client(_url, _key) if _url and _key else None
-except Exception:
+    if _url and _key:
+        sb = create_client(_url, _key)
+        print(f"[OK] Supabase connected: {_url[:40]}...", flush=True)
+    else:
+        sb = None
+        print("[WARN] Supabase: URL/KEY not found in environment", flush=True)
+except Exception as e:
     sb = None
+    print(f"[WARN] Supabase init failed: {e}", flush=True)
 
 # In-memory history fallback (used when Supabase is not configured)
 _local_history: list = []
@@ -341,8 +354,6 @@ def predict(req: PredictReq):
     votes = sum(1 for v in model_comparison_out.values() if v.get("is_delayed", False))
     consensus = "Delayed" if votes >= 2 else "On Time"
 
-    # Recommendation — XGBoost is always the recommended model
-    # (Boosting ensemble: highest precision, fast training, best generalization)
     recommended = "XGBoost" if "XGBoost" in model_comparison_out else best_name
 
     rec_reasons = {
@@ -397,12 +408,29 @@ def predict(req: PredictReq):
     _local_history.insert(0, record)
     if len(_local_history) > 200:
         _local_history.pop()
-    # Also save to Supabase if connected
-    if sb:
+
+    # Save to Supabase via direct HTTP POST (more reliable than supabase-py client)
+    _sb_url = os.getenv("SUPABASE_URL", "")
+    _sb_key = os.getenv("SUPABASE_KEY", "")
+    if _sb_url and _sb_key:
         try:
-            sb.table("predictions").insert(record).execute()
+            import json as _json
+            rest_url = f"{_sb_url.rstrip('/')}/rest/v1/predictions"
+            headers = {
+                "apikey":        _sb_key,
+                "Authorization": f"Bearer {_sb_key}",
+                "Content-Type":  "application/json",
+                "Prefer":        "return=minimal",
+            }
+            resp = requests.post(rest_url, headers=headers,
+                                 data=_json.dumps(record), timeout=8)
+            if resp.status_code not in (200, 201):
+                print(f"[WARN] Supabase insert failed {resp.status_code}: {resp.text[:200]}", flush=True)
+            else:
+                print(f"[OK] Saved to Supabase: {req.origin}->{req.dest} {status}", flush=True)
         except Exception as e:
-            print(f"Supabase save failed: {e}")
+            print(f"[WARN] Supabase insert error: {e}", flush=True)
+
 
 
     return {
@@ -431,21 +459,35 @@ def predict(req: PredictReq):
 
 @app.get("/api/history")
 def get_history(search: str = "", limit: int = 30):
-    # Try Supabase first
-    if sb:
+    # Use direct HTTP REST call — more reliable than supabase-py client state
+    _sb_url = os.getenv("SUPABASE_URL", "")
+    _sb_key = os.getenv("SUPABASE_KEY", "")
+    if _sb_url and _sb_key:
         try:
-            q = (sb.table("predictions")
-                   .select("*")
-                   .order("created_at", desc=True).limit(limit).execute())
-            data = q.data or []
-            if search:
-                s = search.upper()
-                data = [r for r in data if s in r.get("origin","") or
-                        s in r.get("destination","") or s in r.get("airline","") or
-                        search.lower() in r.get("status","").lower()]
-            return {"predictions": data}
+            rest_url = f"{_sb_url.rstrip('/')}/rest/v1/predictions"
+            headers = {
+                "apikey":        _sb_key,
+                "Authorization": f"Bearer {_sb_key}",
+                "Content-Type":  "application/json",
+            }
+            params = {
+                "select": "*",
+                "order":  "created_at.desc",
+                "limit":  str(limit),
+            }
+            resp = requests.get(rest_url, headers=headers, params=params, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                if search:
+                    s = search.upper()
+                    data = [r for r in data if s in r.get("origin","") or
+                            s in r.get("destination","") or s in r.get("airline","") or
+                            search.lower() in r.get("status","").lower()]
+                return {"predictions": data}
+            else:
+                print(f"[WARN] Supabase REST error {resp.status_code}: {resp.text[:200]}", flush=True)
         except Exception as e:
-            print(f"Supabase history error: {e}", flush=True)
+            print(f"[WARN] Supabase history HTTP error: {e}", flush=True)
 
     # Fallback to in-memory history
     data = _local_history[:limit]
@@ -455,6 +497,7 @@ def get_history(search: str = "", limit: int = 30):
                 s in r.get("destination","") or s in r.get("airline","") or
                 search.lower() in r.get("status","").lower()]
     return {"predictions": data}
+
 
 
 @app.get("/api/airports/search")
@@ -502,6 +545,25 @@ def get_plots():
     ]
     available = [p for p in plot_defs if (PLOTS / f"{p['id']}.png").exists()]
     return {"plots": available, "total": len(available)}
+
+@app.get("/api/debug-history")
+def debug_history():
+    """Temporary debug endpoint — remove after fixing."""
+    info = {
+        "sb_connected": sb is not None,
+        "supabase_url": os.getenv("SUPABASE_URL", "NOT_FOUND")[:40],
+        "key_present":  bool(os.getenv("SUPABASE_KEY", "")),
+    }
+    if sb:
+        try:
+            r = sb.table("predictions").select("*").order("created_at", desc=True).limit(5).execute()
+            info["rows_returned"] = len(r.data)
+            info["sample"] = r.data[:2] if r.data else []
+            info["error"] = None
+        except Exception as e:
+            info["rows_returned"] = 0
+            info["error"] = str(e)
+    return info
 
 @app.get("/")
 def root():
