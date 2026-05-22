@@ -477,7 +477,6 @@ SkyBuffer/
 
 ---
 
-## Academic Notes
 
 ### Why F1-Score is the Primary Metric
 
